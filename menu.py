@@ -42,7 +42,7 @@ def main():
                     print(f"\nVocabulário ({len(sistema.vocabulario)} termos):")
                     print(", ".join(sistema.vocabulario))
                 case '5':
-                    ()
+                    sistema.matriz_handler.exibir_matriz_tfidf()
                 case '6':
                     ()
                 case '7':
