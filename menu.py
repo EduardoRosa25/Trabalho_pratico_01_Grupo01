@@ -1,4 +1,8 @@
-
+from Colecao import Colecao
+import nltk
+from nltk.corpus import stopwords
+from nltk.stem import RSLPStemmer
+2
 def print_menu():
     print('\n=== MENU PRINCIPAL ===')
     print('1) Adicionar um documento por vez à coleção')
@@ -15,6 +19,12 @@ def print_menu():
 
 
 def main():
+
+    sistema = Colecao()
+    arquivo_json = 'colecao - trabalho 01.json'
+
+    sistema.carregar_dados_iniciais(arquivo_json)
+
     while True:
         print_menu()
         choice = input('Escolha uma opção: ').strip()
@@ -22,13 +32,15 @@ def main():
         try:
             match choice:
                 case '1':
-                    ()
+                    sistema.adicionar_proximo_da_fila()
                 case '2':
-                    ()
+                    sistema.adicionar_todos_restantes()
                 case '3':
-                    ()
+                    id_doc = input("ID do Documento para remover: ")
+                    sistema.remover_documento(id_doc)
                 case '4':
-                    ()
+                    print(f"\nVocabulário ({len(sistema.vocabulario)} termos):")
+                    print(", ".join(sistema.vocabulario))
                 case '5':
                     ()
                 case '6':
