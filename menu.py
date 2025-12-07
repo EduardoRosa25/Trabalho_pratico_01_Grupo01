@@ -45,26 +45,45 @@ def main():
                 case '5':
                     sistema.matriz_handler.exibir_matriz_tfidf()
                 
-                case '7':
-                    print("\n--- Consulta Booleana (AND, OR, NOT) ---")
-                    query = input("Digite a consulta (termos, ex: 'sol liberdade'): ")
-                    operador = input("Digite o operador (AND, OR, NOT): ").strip()
-                    
-                    # Chama o método implementado em MatrizTFIDF
-                    resultados = sistema.matriz_handler.buscar_booleana(query, operador)
-                    
-                    if resultados:
-                        print(f"\n✅ Resultados para '{query}' ({operador.upper()}):")
-                        print(f"Documentos encontrados: {', '.join(resultados)}")
-                    else:
-                        print(f"\n❌ Nenhum documento encontrado para a consulta '{query}' ({operador.upper()}).")
-
                 case '6':
+                  sistema.get_indice_invertido_handler().exibir_indice()
+                
+                case '7':
+                  print("\n--- Consulta Booleana (AND, OR, NOT) ---")
+                  query = input("Digite a consulta (termos, ex: 'sol liberdade'): ")
+                  operador = input("Digite o operador (AND, OR, NOT): ").strip()
                     
-                    print("Opção 6: Exibir Índice Invertido - Implementação Pendente.")
+                  # Chama o método implementado em MatrizTFIDF
+                  resultados = sistema.matriz_handler.buscar_booleana(query, operador)
+                    
+                  if resultados:
+                    print(f"\n✅ Resultados para '{query}' ({operador.upper()}):")
+                    print(f"Documentos encontrados: {', '.join(resultados)}")
+                  else:
+                    print(f"\n❌ Nenhum documento encontrado para a consulta '{query}' ({operador.upper()}).")
+
                 case '8':
+                  if not sistema.documentos:
+                    print("[ERRO] A coleção está vazia. Adicione documentos antes de consultar.")
+                    continue
+                        
+                  print("\n--- Consulta por Similaridade (Vetorial - Cosseno) ---")
+                  query = input("Digite a consulta (termos livres): ").strip()
                     
-                    print("Opção 8: Consultas por Similaridade - Implementação Pendente.")
+                  # Chama o método de busca, passando o Índice Invertido (para otimização)
+                  resultados = sistema.get_matriz_handler().buscar_similaridade(
+                    query,
+                    sistema.get_indice_invertido_handler().get_indice() # Passa o índice para otimização
+                  )
+                    
+                  if resultados:
+                    print(f"\n✅ Ranqueamento dos documentos mais relevantes para '{query}':")
+                    # Ranqueamento: lista o documento e seu score de similaridade
+                    for doc_id, score in resultados:
+                      print(f"- {doc_id}: Similaridade = {score:.4f}")
+                    else:
+                      print(f"\n❌ Nenhum documento relevante encontrado para a consulta.")
+
                 case '9':
                     
                     print("Opção 9: Consultas por Frase - Implementação Pendente. ")
