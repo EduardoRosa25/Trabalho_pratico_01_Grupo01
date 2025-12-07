@@ -1,6 +1,6 @@
 import pandas as pd
 import numpy as np
-from typing import List, Dict, Union, Any
+from typing import List, Dict, Union, Any, Tuple
 
 # Importa a classe do colega para poder processar as queries de busca
 # Assumimos que ProcessadorTexto e Documento estão em arquivos .py separados e acessíveis
@@ -20,8 +20,17 @@ class MatrizTFIDF:
         self.matriz_tf: pd.DataFrame = pd.DataFrame()
         self.vetor_idf: pd.Series = pd.Series()
         self.matriz_tfidf: pd.DataFrame = pd.DataFrame()
+        self.normas_doc: Dict[str, float] = {}
         # Instancia o ProcessadorTexto para uso interno, especialmente para processar queries
         self.processador = ProcessadorTexto()
+
+    # --- NOVO MÉTODO PARA CALCULAR NORMA ---
+
+    def calcular_normas_doc(self, matriz_tfidf: pd.DataFrame) -> Dict[str, float]:
+        """Calcula a norma Euclidiana (comprimento) para cada vetor documento."""
+        # Norma = Raiz Quadrada da Soma dos Quadrados dos Pesos (TF-IDF)
+        normas = np.sqrt((matriz_tfidf**2).sum(axis=0))
+        return normas.to_dict() 
 
     # --- MÉTODOS DE CÁLCULO (Seu código original adaptado) ---
     
@@ -64,6 +73,7 @@ class MatrizTFIDF:
         self.matriz_tf = self.calcular_tf(docs_processados, nomes_docs)
         self.vetor_idf = self.calcular_idf(self.matriz_tf)
         self.matriz_tfidf = self.calcular_tfidf(self.matriz_tf, self.vetor_idf)
+        self.normas_doc = self.calcular_normas_doc(self.matriz_tfidf)
 
     def exibir_matriz_tfidf(self):
         """Opção 5 do Menu."""
@@ -135,3 +145,82 @@ class MatrizTFIDF:
             print(f"[ERRO] Operador booleano '{operador}' não suportado. Use AND, OR, ou NOT.")
             
         return resultados
+
+    # --- MÉTODO PARA CONSULTA POR SIMILARIDADE (Opção 8) ---
+
+    def buscar_similaridade(self, query: str, indice_invertido: Dict[str, Dict[str, List[int]]]) -> List[Tuple[str, float]]:
+        """
+        Calcula a Similaridade de Cosseno (vetorial) usando os pesos TF-IDF e
+        o Índice Invertido para otimizar o produto escalar.
+        """
+        if self.matriz_tfidf.empty or not self.normas_doc:
+            print("[ERRO] Matriz TF-IDF ou Normas de Documento ausentes. Impossível buscar.")
+            return []
+            
+        # 1. Pré-processamento e Vetor da Query
+        query_processada = self.processador.processar(query)
+        if not query_processada:
+            return []
+
+        # Calcula o TF da Query
+        query_tf_raw = pd.Series([query_processada.count(t) for t in self.vocabulario], index=self.vocabulario)
+        query_tf = query_tf_raw.map(lambda x: 1 + np.log2(x) if x > 0 else 0)
+        
+        # Filtra termos válidos (que estão no vocabulário da coleção)
+        termos_validos = query_tf[query_tf > 0].index.intersection(self.vetor_idf.index)
+        if termos_validos.empty:
+            return []
+
+        # Vetor TF-IDF da Query: W_t,Q = TF_t,Q * IDF_t
+        query_vector = query_tf[termos_validos] * self.vetor_idf[termos_validos]
+        
+        # Norma da Query (parte do denominador)
+        norma_query = np.sqrt((query_vector**2).sum())
+        if norma_query == 0:
+            return []
+
+        # 2. Otimização e Acumulação de Scores (Produto Escalar)
+        
+        scores: Dict[str, float] = {}
+        documentos_candidatos = set()
+
+        # Usa o Índice Invertido para identificar APENAS os documentos que contêm
+        # pelo menos um termo da query (Documentos Candidatos)
+        for termo in termos_validos:
+            if termo in indice_invertido:
+                documentos_candidatos.update(indice_invertido[termo].keys())
+
+        if not documentos_candidatos:
+            return []
+            
+        # Acumulação: Soma do Produto Escalar (W_t,Q * W_t,D)
+        for doc_id in documentos_candidatos:
+            soma_produto = 0.0
+            
+            for termo in termos_validos:
+                # Pega o peso do termo na query
+                w_q = query_vector.get(termo, 0.0)
+                
+                # Pega o peso do termo no documento (na matriz TF-IDF)
+                # O .loc[termo, doc_id] garante que peguemos o peso correto
+                w_d = self.matriz_tfidf.loc[termo, doc_id]
+                
+                soma_produto += w_q * w_d
+            
+            scores[doc_id] = soma_produto
+            
+        # 3. Cálculo Final da Similaridade e Ranqueamento
+        
+        resultados_finais: List[Tuple[str, float]] = []
+        for doc_id, produto_escalar in scores.items():
+            norma_doc = self.normas_doc.get(doc_id, 0.0)
+
+            if produto_escalar > 0 and norma_doc > 0:
+                # Sim(Q, D) = (Produto Escalar) / (Norma Q * Norma D)
+                similaridade = produto_escalar / (norma_query * norma_doc)
+                resultados_finais.append((doc_id, similaridade))
+                
+        # Ranqueamento (ordenar pelo score, do maior para o menor)
+        resultados_finais.sort(key=lambda item: item[1], reverse=True)
+        
+        return resultados_finais
