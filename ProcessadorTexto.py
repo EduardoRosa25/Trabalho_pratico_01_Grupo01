@@ -25,13 +25,13 @@ class ProcessadorTexto:
         """
         texto = texto.lower()
         texto = re.sub(r'[^a-zà-úÀ-Ú\s]', '', texto)
-        
+
         tokens = texto.split()
-        
+
         tokens_processados = [
-            self.stemmer.stem(t) 
-            for t in tokens 
+            self.stemmer.stem(t)
+            for t in tokens
             if t not in self.stopwords_pt and len(t) > 1
         ]
-        
+
         return tokens_processados

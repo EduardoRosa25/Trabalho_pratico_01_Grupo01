@@ -1,226 +1,120 @@
 import pandas as pd
 import numpy as np
-from typing import List, Dict, Union, Any, Tuple
-
-# Importa a classe do colega para poder processar as queries de busca
-# Assumimos que ProcessadorTexto e Documento estão em arquivos .py separados e acessíveis
-from ProcessadorTexto import ProcessadorTexto 
+from typing import List, Dict, Tuple
+from ProcessadorTexto import ProcessadorTexto
 from Documento import Documento
 
-# Usamos a classe Documento real para type hinting, assumindo que ela será importada
-# A classe Colecao passa os objetos Documento (que têm termos_processados) para este método.
-
 class MatrizTFIDF:
-    """
-    Gerencia o Vocabulário e a Matriz TF-IDF, e realiza a Consulta Booleana.
-    Responsável por calcular e manter as matrizes TF, IDF e TF-IDF.
-    """
     def __init__(self):
         self.vocabulario: List[str] = []
         self.matriz_tf: pd.DataFrame = pd.DataFrame()
         self.vetor_idf: pd.Series = pd.Series()
         self.matriz_tfidf: pd.DataFrame = pd.DataFrame()
         self.normas_doc: Dict[str, float] = {}
-        # Instancia o ProcessadorTexto para uso interno, especialmente para processar queries
         self.processador = ProcessadorTexto()
 
-    # --- NOVO MÉTODO PARA CALCULAR NORMA ---
-
-    def calcular_normas_doc(self, matriz_tfidf: pd.DataFrame) -> Dict[str, float]:
-        """Calcula a norma Euclidiana (comprimento) para cada vetor documento."""
-        # Norma = Raiz Quadrada da Soma dos Quadrados dos Pesos (TF-IDF)
-        normas = np.sqrt((matriz_tfidf**2).sum(axis=0))
-        return normas.to_dict() 
-
-    # --- MÉTODOS DE CÁLCULO (Seu código original adaptado) ---
-    
-    def calcular_tf(self, docs_processados: List[List[str]], nomes_docs: List[str]) -> pd.DataFrame:
-        """Calcula o Log do TF (1 + log2(f))."""
-        self.vocabulario = sorted(set([t for doc in docs_processados for t in doc]))
-        matriz_tf = pd.DataFrame(0.0, index=self.vocabulario, columns=nomes_docs)
-        
-        for nome, termos in zip(nomes_docs, docs_processados):
-            for termo in termos:
-                if termo in matriz_tf.index:
-                    matriz_tf.loc[termo, nome] += 1
-        
-        matriz_tf = matriz_tf.map(lambda x: 1 + np.log2(x) if x > 0 else 0)
-        return matriz_tf
-
-    def calcular_idf(self, matriz_tf: pd.DataFrame) -> pd.Series:
-        """Calcula o Vetor de IDF (log2(N / ni))."""
-        N = matriz_tf.shape[1]
-        ni = (matriz_tf > 0).sum(axis=1)
-        idf = np.log2(N / ni)
-        return pd.Series(idf, index=matriz_tf.index, name="IDF")
-
-    def calcular_tfidf(self, matriz_tf: pd.DataFrame, idf: pd.Series) -> pd.DataFrame:
-        """Calcula a Matriz TF-IDF (TF * IDF)."""
-        return matriz_tf.mul(idf, axis=0)
-
-    # --- ORQUESTRADOR E EXIBIÇÃO ---
-    
     def construir_matrizes(self, documentos: Dict[str, Documento]):
-        """Orquestra o cálculo completo do TF, IDF e TF-IDF."""
         if not documentos:
-            self.__limpar_matrizes()
             return
 
         nomes_docs = list(documentos.keys())
-        # Usa o atributo termos_processados do objeto Documento do colega
         docs_processados = [doc.termos_processados for doc in documentos.values()]
-        
-        self.matriz_tf = self.calcular_tf(docs_processados, nomes_docs)
-        self.vetor_idf = self.calcular_idf(self.matriz_tf)
-        self.matriz_tfidf = self.calcular_tfidf(self.matriz_tf, self.vetor_idf)
-        self.normas_doc = self.calcular_normas_doc(self.matriz_tfidf)
+
+        # 1. Vocabulário Global
+        self.vocabulario = sorted(set([t for doc in docs_processados for t in doc]))
+
+        # 2. Matriz TF (1 + log2(f))
+        # Cria dataframe vazio e preenche
+        self.matriz_tf = pd.DataFrame(0.0, index=self.vocabulario, columns=nomes_docs)
+        for nome, termos in zip(nomes_docs, docs_processados):
+            for termo in termos:
+                self.matriz_tf.loc[termo, nome] += 1
+
+        # Aplica log apenas onde > 0
+        self.matriz_tf = self.matriz_tf.map(lambda x: 1 + np.log2(x) if x > 0 else 0)
+
+        # 3. Vetor IDF (log2(N / ni))
+        N = len(nomes_docs)
+        ni = (self.matriz_tf > 0).sum(axis=1)
+        # Evita divisão por zero
+        idf_vals = np.log2(N / ni.replace(0, 1))
+        self.vetor_idf = pd.Series(idf_vals, index=self.vocabulario)
+
+        # 4. TF-IDF
+        self.matriz_tfidf = self.matriz_tf.mul(self.vetor_idf, axis=0)
+
+        # 5. Normas (para cosseno)
+        self.normas_doc = np.sqrt((self.matriz_tfidf**2).sum(axis=0)).to_dict()
 
     def exibir_matriz_tfidf(self):
-        """Opção 5 do Menu."""
         if self.matriz_tfidf.empty:
-            print("[INFO] A Matriz TF-IDF está vazia. Adicione documentos à coleção.")
+            print("[INFO] Matriz vazia.")
         else:
-            print("\n--- Matriz TF-IDF (Term Frequency-Inverse Document Frequency) ---")
             print(self.matriz_tfidf.round(4))
 
-    def __limpar_matrizes(self):
-        """Método auxiliar para limpar todas as estruturas internas."""
-        self.vocabulario = []
-        self.matriz_tf = pd.DataFrame()
-        self.vetor_idf = pd.Series()
-        self.matriz_tfidf = pd.DataFrame()
-
-    # --- CONSULTA BOLEANA (REQUISITO FUNCIONAL 7) ---
-    
     def buscar_booleana(self, query: str, operador: str) -> List[str]:
-        """
-        Implementa a busca booleana (AND, OR, NOT) usando a Matriz TF-IDF (presença > 0).
-        """
-        if self.matriz_tfidf.empty:
-            print("[ERRO] A Matriz TF-IDF está vazia. Impossível buscar.")
-            return []
+        if self.matriz_tfidf.empty: return []
 
-        # 1. Pré-processamento da Query (usa ProcessadorTexto)
-        query_processada = self.processador.processar(query)
+        termos_query = self.processador.processar(query)
+        # Filtra apenas termos que existem no vocabulário
+        termos_validos = [t for t in termos_query if t in self.matriz_tfidf.index]
 
-        if not query_processada:
-            print("[AVISO] A consulta não contém termos válidos após processamento (stopwords/radicais).")
-            return []
+        if not termos_validos: return []
 
-        # Filtrar a Matriz: Apenas termos da query que existem no vocabulário
-        termos_existentes = self.matriz_tfidf.index.intersection(query_processada)
-        if termos_existentes.empty:
-            print(f"[AVISO] Nenhum termo da consulta ('{query_processada}') existe no vocabulário da coleção.")
-            return []
-            
-        # Matriz de Presença: 1 se TF-IDF > 0 (o termo existe no documento), 0 caso contrário
-        matriz_presenca = (self.matriz_tfidf.loc[termos_existentes] > 0).astype(int)
-        
+        # Matriz de presença (0 ou 1)
+        presenca = (self.matriz_tfidf.loc[termos_validos] > 0).astype(int)
         operador = operador.upper()
-        documentos_disponiveis = self.matriz_tfidf.columns.tolist()
-        resultados = []
 
         if operador == 'AND':
-            # AND: A soma das presenças deve ser igual ao número de termos existentes
-            soma_presencas = matriz_presenca.sum(axis=0)
-            documentos_candidatos = soma_presencas[soma_presencas == len(termos_existentes)].index.tolist()
-            resultados = [doc_id for doc_id in documentos_candidatos if doc_id in documentos_disponiveis]
+            # Soma das presenças tem que ser igual à qtde de termos
+            match = presenca.sum(axis=0) == len(termos_validos)
+            return match[match].index.tolist()
 
         elif operador == 'OR':
-            # OR: A soma das presenças deve ser maior que zero (pelo menos um termo presente)
-            soma_presencas = matriz_presenca.sum(axis=0)
-            documentos_candidatos = soma_presencas[soma_presencas > 0].index.tolist()
-            resultados = [doc_id for doc_id in documentos_candidatos if doc_id in documentos_disponiveis]
+            # Soma > 0
+            match = presenca.sum(axis=0) > 0
+            return match[match].index.tolist()
 
         elif operador == 'NOT':
-            # NOT: Documentos que NÃO contêm NENHUM dos termos da query.
-            # Documentos que contêm pelo menos um dos termos da query
-            docs_com_termo = matriz_presenca.columns[matriz_presenca.sum(axis=0) > 0].tolist()
-            
-            # Todos os documentos menos aqueles que contêm o termo
-            todos_documentos = set(documentos_disponiveis)
-            resultados = list(todos_documentos - set(docs_com_termo))
-            
-        else:
-            print(f"[ERRO] Operador booleano '{operador}' não suportado. Use AND, OR, ou NOT.")
-            
-        return resultados
+            # Docs que contêm os termos
+            match_pos = presenca.sum(axis=0) > 0
+            docs_com_termo = match_pos[match_pos].index.tolist()
+            # Retorna quem NÃO está na lista acima
+            todos = self.matriz_tfidf.columns.tolist()
+            return list(set(todos) - set(docs_com_termo))
 
-    # --- MÉTODO PARA CONSULTA POR SIMILARIDADE (Opção 8) ---
+        return []
 
-    def buscar_similaridade(self, query: str, indice_invertido: Dict[str, Dict[str, List[int]]]) -> List[Tuple[str, float]]:
-        """
-        Calcula a Similaridade de Cosseno (vetorial) usando os pesos TF-IDF e
-        o Índice Invertido para otimizar o produto escalar.
-        """
-        if self.matriz_tfidf.empty or not self.normas_doc:
-            print("[ERRO] Matriz TF-IDF ou Normas de Documento ausentes. Impossível buscar.")
-            return []
-            
-        # 1. Pré-processamento e Vetor da Query
-        query_processada = self.processador.processar(query)
-        if not query_processada:
-            return []
+    def buscar_similaridade(self, query: str, indice: Dict) -> List[Tuple[str, float]]:
+        if self.matriz_tfidf.empty: return []
 
-        # Calcula o TF da Query
-        query_tf_raw = pd.Series([query_processada.count(t) for t in self.vocabulario], index=self.vocabulario)
-        query_tf = query_tf_raw.map(lambda x: 1 + np.log2(x) if x > 0 else 0)
-        
-        # Filtra termos válidos (que estão no vocabulário da coleção)
-        termos_validos = query_tf[query_tf > 0].index.intersection(self.vetor_idf.index)
-        if termos_validos.empty:
-            return []
+        q_termos = self.processador.processar(query)
+        # TF da Query
+        q_tf = pd.Series([q_termos.count(t) for t in self.vocabulario], index=self.vocabulario)
+        q_tf = q_tf.map(lambda x: 1 + np.log2(x) if x > 0 else 0)
 
-        # Vetor TF-IDF da Query: W_t,Q = TF_t,Q * IDF_t
-        query_vector = query_tf[termos_validos] * self.vetor_idf[termos_validos]
-        
-        # Norma da Query (parte do denominador)
-        norma_query = np.sqrt((query_vector**2).sum())
-        if norma_query == 0:
-            return []
+        # TF-IDF da Query (apenas termos validos)
+        q_vec = q_tf * self.vetor_idf
+        q_norm = np.sqrt((q_vec**2).sum())
 
-        # 2. Otimização e Acumulação de Scores (Produto Escalar)
-        
-        scores: Dict[str, float] = {}
-        documentos_candidatos = set()
+        if q_norm == 0: return []
 
-        # Usa o Índice Invertido para identificar APENAS os documentos que contêm
-        # pelo menos um termo da query (Documentos Candidatos)
-        for termo in termos_validos:
-            if termo in indice_invertido:
-                documentos_candidatos.update(indice_invertido[termo].keys())
+        # Candidatos via índice invertido (otimização)
+        candidatos = set()
+        for t in q_termos:
+            if t in indice:
+                candidatos.update(indice[t].keys())
 
-        if not documentos_candidatos:
-            return []
-            
-        # Acumulação: Soma do Produto Escalar (W_t,Q * W_t,D)
-        for doc_id in documentos_candidatos:
-            soma_produto = 0.0
-            
-            for termo in termos_validos:
-                # Pega o peso do termo na query
-                w_q = query_vector.get(termo, 0.0)
-                
-                # Pega o peso do termo no documento (na matriz TF-IDF)
-                # O .loc[termo, doc_id] garante que peguemos o peso correto
-                w_d = self.matriz_tfidf.loc[termo, doc_id]
-                
-                soma_produto += w_q * w_d
-            
-            scores[doc_id] = soma_produto
-            
-        # 3. Cálculo Final da Similaridade e Ranqueamento
-        
-        resultados_finais: List[Tuple[str, float]] = []
-        for doc_id, produto_escalar in scores.items():
-            norma_doc = self.normas_doc.get(doc_id, 0.0)
+        resultados = []
+        for doc_id in candidatos:
+            # Produto Escalar
+            doc_vec = self.matriz_tfidf[doc_id]
+            dot = (q_vec * doc_vec).sum()
+            d_norm = self.normas_doc.get(doc_id, 0)
 
-            if produto_escalar > 0 and norma_doc > 0:
-                # Sim(Q, D) = (Produto Escalar) / (Norma Q * Norma D)
-                similaridade = produto_escalar / (norma_query * norma_doc)
-                resultados_finais.append((doc_id, similaridade))
-                
-        # Ranqueamento (ordenar pelo score, do maior para o menor)
-        resultados_finais.sort(key=lambda item: item[1], reverse=True)
-        
-        return resultados_finais
+            if d_norm > 0:
+                score = dot / (q_norm * d_norm)
+                if score > 0:
+                    resultados.append((doc_id, score))
+
+        return sorted(resultados, key=lambda x: x[1], reverse=True)

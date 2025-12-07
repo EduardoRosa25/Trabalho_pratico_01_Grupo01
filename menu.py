@@ -1,110 +1,122 @@
+#Alunos:
+#  Bernardo Carvalho Trindade 12321BSI253 
+#  Eduardo Antonio 12311BSI317
+#  Eduardo Rosa 12311BSI275
+#  Luiz Fellipe 12311BSI262 
+#  Lucas Pinheiro Barbosa 12221BSI224
+
 from Colecao import Colecao
-# Não precisa importar nltk, stopwords, e RSLPStemmer aqui, pois Colecao e ProcessadorTexto já cuidam disso.
-# A linha "2" no seu original foi ignorada.
+import sys
+
+# Função auxiliar para limpar a tela ou dar espaço (opcional, mas ajuda na visualização)
+def espaco():
+    print("\n" + "="*30 + "\n")
 
 def print_menu():
     print('\n=== MENU PRINCIPAL ===')
-    print('1) Adicionar um documento por vez à coleção')
-    print('2) Adicionar todos os documentos da lista')
-    print('3) Remover um documento da coleção pelo seu identificador')
-    print('4) Exibir o vocabulário atualizado')
-    print('5) Exibir a matriz TF-IDF atual')
-    print('6) Exibir o índice invertido completo por posição de palavras')
-    print('7) Realizar consultas booleanas')
-    print('8) Realizar consultas por similaridade')
-    print('9) Realizar consultas por frase')
-    print('10) Outras operações (extensões do grupo)')
+    print('1) Adicionar um documento por vez (fila)')
+    print('2) Adicionar TODOS os documentos (lote)')
+    print('3) Remover documento por ID')
+    print('4) Exibir Vocabulário')
+    print('5) Exibir Matriz TF-IDF')
+    print('6) Exibir Índice Invertido (Posicional)')
+    print('7) Consulta Booleana (AND, OR, NOT)')
+    print('8) Consulta por Similaridade (Ranking)')
+    print('9) Consulta por Frase (Exata)')
     print('0) Sair')
 
-
 def main():
-
     sistema = Colecao()
     arquivo_json = 'colecao - trabalho 01.json'
 
-    # Carrega os dados iniciais do JSON na memória (não adiciona à coleção, apenas prepara a fila)
+    # Carrega o JSON na memória
     sistema.carregar_dados_iniciais(arquivo_json)
 
     while True:
         print_menu()
         choice = input('Escolha uma opção: ').strip()
-        
+
         try:
-            match choice:
-                case '1':
-                    sistema.adicionar_proximo_da_fila()
-                case '2':
-                    sistema.adicionar_todos_restantes()
-                case '3':
-                    id_doc = input("ID do Documento para remover: ")
-                    sistema.remover_documento(id_doc)
-                case '4':
-                    print(f"\nVocabulário ({len(sistema.vocabulario)} termos):")
-                    print(", ".join(sistema.vocabulario))
-                
-                case '5':
-                    sistema.matriz_handler.exibir_matriz_tfidf()
-                
-                case '6':
-                  sistema.get_indice_invertido_handler().exibir_indice()
-                
-                case '7':
-                  print("\n--- Consulta Booleana (AND, OR, NOT) ---")
-                  query = input("Digite a consulta (termos, ex: 'sol liberdade'): ")
-                  operador = input("Digite o operador (AND, OR, NOT): ").strip()
-                    
-                  # Chama o método implementado em MatrizTFIDF
-                  resultados = sistema.matriz_handler.buscar_booleana(query, operador)
-                    
-                  if resultados:
-                    print(f"\n✅ Resultados para '{query}' ({operador.upper()}):")
-                    print(f"Documentos encontrados: {', '.join(resultados)}")
-                  else:
-                    print(f"\n❌ Nenhum documento encontrado para a consulta '{query}' ({operador.upper()}).")
+            if choice == '1':
+                sistema.adicionar_proximo_da_fila()
 
-                case '8':
-                  if not sistema.documentos:
-                    print("[ERRO] A coleção está vazia. Adicione documentos antes de consultar.")
+            elif choice == '2':
+                sistema.adicionar_todos_restantes()
+
+            elif choice == '3':
+                id_doc = input("Digite o ID do Documento (ex: D1): ").strip()
+                sistema.remover_documento(id_doc)
+
+            elif choice == '4':
+                vocab = sistema.get_vocabulario()
+                print(f"\nVocabulário ({len(vocab)} termos):")
+                print(", ".join(vocab))
+
+            elif choice == '5':
+                sistema.get_matriz_handler().exibir_matriz_tfidf()
+
+            elif choice == '6':
+                sistema.get_indice_invertido_handler().exibir_indice()
+
+            elif choice == '7':
+                if not sistema.documentos:
+                    print("[ERRO] Coleção vazia. Adicione documentos primeiro.")
                     continue
-                        
-                  print("\n--- Consulta por Similaridade (Vetorial - Cosseno) ---")
-                  query = input("Digite a consulta (termos livres): ").strip()
-                    
-                  # Chama o método de busca, passando o Índice Invertido (para otimização)
-                  resultados = sistema.get_matriz_handler().buscar_similaridade(
-                    query,
-                    sistema.get_indice_invertido_handler().get_indice() # Passa o índice para otimização
-                  )
-                    
-                  if resultados:
-                    print(f"\n✅ Ranqueamento dos documentos mais relevantes para '{query}':")
-                    # Ranqueamento: lista o documento e seu score de similaridade
-                    for doc_id, score in resultados:
-                      print(f"- {doc_id}: Similaridade = {score:.4f}")
-                    else:
-                      print(f"\n❌ Nenhum documento relevante encontrado para a consulta.")
+                print("\n--- Consulta Booleana ---")
+                query = input("Termos da consulta: ")
+                operador = input("Operador (AND, OR, NOT): ").strip()
 
-                case '9':
-                    
-                    print("Opção 9: Consultas por Frase - Implementação Pendente. ")
-                case '10':
-                    print('Opção 10: Extensões do Grupo - Implementação Pendente.')
-                case '0':
-                    print('Saindo...')
-                    return
-                case _:
-                    print('Opção inválida. Tente novamente.')
-        
-        except SyntaxError:
-            # Caso a versão do Python seja antiga (antes do 3.10)
-            print('Erro de sintaxe: sua versão do Python pode não suportar `match-case`.')
-            print('Dica: Mude para uma estrutura `if/elif/else`.')
-            return
+                res = sistema.get_matriz_handler().buscar_booleana(query, operador)
+                if res:
+                    print(f"✅ Documentos encontrados ({operador}): {', '.join(res)}")
+                else:
+                    print(f"❌ Nenhum resultado para '{query}' com operador {operador}.")
+
+            elif choice == '8':
+                if not sistema.documentos:
+                    print("[ERRO] Coleção vazia.")
+                    continue
+                print("\n--- Consulta por Similaridade (Cosseno) ---")
+                query = input("Digite a consulta: ")
+
+                indice = sistema.get_indice_invertido_handler().get_indice()
+                ranking = sistema.get_matriz_handler().buscar_similaridade(query, indice)
+
+                if ranking:
+                    print(f"✅ Ranking de Relevância:")
+                    for doc_id, score in ranking:
+                        print(f"1. {doc_id} (Score: {score:.4f})")
+                else:
+                    print("❌ Nenhum documento relevante encontrado.")
+
+            elif choice == '9':
+                if not sistema.documentos:
+                    print("[ERRO] Coleção vazia.")
+                    continue
+                print("\n--- Consulta por Frase ---")
+                frase = input("Digite a frase exata: ").strip()
+
+                frase_processada = sistema.processador.processar(frase)
+                if not frase_processada:
+                    print("[AVISO] Frase vazia ou só contém stopwords.")
+                    continue
+
+                res = sistema.get_indice_invertido_handler().buscar_por_frase(frase_processada)
+
+                if res:
+                    print(f"✅ Frase encontrada nos documentos: {', '.join(res)}")
+                else:
+                    print("❌ Frase não encontrada exatamente nessa ordem.")
+
+            elif choice == '0':
+                print("Encerrando sistema...")
+                break
+
+            else:
+                print("Opção inválida.")
+
         except Exception as e:
-            print(f"[ERRO CRÍTICO] Ocorreu um erro no sistema: {e}")
-            
+            print(f"[ERRO CRÍTICO] {e}")
+
 if __name__ == '__main__':
-    try:
-        main()
-    except KeyboardInterrupt:
-        print('\nPrograma interrompido pelo usuário.')
+    main()

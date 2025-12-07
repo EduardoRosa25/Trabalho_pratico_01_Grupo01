@@ -1,55 +1,75 @@
-from typing import Dict, List, Tuple
-from Documento import Documento # Importa a classe Documento
+from typing import Dict, List, Set
+from Documento import Documento
 
 class IndiceInvertido:
-    """
-    Gerenciar o Índice Invertico com as posições...
-    """
     def __init__(self):
-        # Estrutura do Índice Invertido
+        # Estrutura: { termo: { id_doc: [pos1, pos2, ...], ... } }
         self.indice: Dict[str, Dict[str, List[int]]] = {}
 
     def construir_indice(self, documentos: Dict[str, Documento]):
-        """
-        Construir ou atualizar o Índice Invertido a partir da coleção.
-        """
+        """Constroi o índice com as posições dos termos."""
         self.indice.clear()
-        
         for doc_id, doc in documentos.items():
-            # Itera sobre os termos processados (radicais) e suas posições (índices)
             for posicao, termo in enumerate(doc.termos_processados):
                 if termo not in self.indice:
                     self.indice[termo] = {}
-                
                 if doc_id not in self.indice[termo]:
                     self.indice[termo][doc_id] = []
-                    
                 self.indice[termo][doc_id].append(posicao)
 
     def get_indice(self) -> Dict[str, Dict[str, List[int]]]:
-          """Retorna o índice completo para uso em consultas."""
-          return self.indice
+        return self.indice
 
     def exibir_indice(self):
         if not self.indice:
-            print("[INFO] O Índice Invertido está vazio. Adicione documentos à coleção.")
+            print("[INFO] O Índice Invertido está vazio.")
             return
-
         print("\n--- Índice Invertido (Termo: {Doc_ID: [posições]}) ---")
-        
-        # Ordena por termo para exibição
         termos_ordenados = sorted(self.indice.keys())
-        
-        # Exibe no formato solicitado
         for termo in termos_ordenados:
-            posting_list = self.indice[termo]
-            posts_formatados = []
-            
-            # Ordena a posting list por Doc_ID
-            doc_ids_ordenados = sorted(posting_list.keys())
-            
-            for doc_id in doc_ids_ordenados:
-                posicoes = posting_list[doc_id]
-                posts_formatados.append(f"{doc_id}: {posicoes}")
-                
-            print(f"'{termo}': {' | '.join(posts_formatados)}")
+            posting = self.indice[termo]
+            # Formata a saída: D1: [1, 5] | D2: [3]
+            formatado = " | ".join([f"{did}: {posting[did]}" for did in sorted(posting.keys())])
+            print(f"'{termo}': {formatado}")
+
+    # --- MÉTODOS DE BUSCA (Incorporado do Indexador.py) ---
+
+    def buscar_por_frase(self, frase_processada: List[str]) -> Set[str]:
+        """
+        Retorna os IDs dos documentos que contêm a frase exata.
+        """
+        if not frase_processada:
+            return set()
+
+        termo_inicial = frase_processada[0]
+
+        # Se o primeiro termo nem existe no índice, a frase não existe
+        if termo_inicial not in self.indice:
+            return set()
+
+        candidatos = set()
+        docs_do_termo_inicial = self.indice[termo_inicial]
+
+        # Verifica cada documento que tem a primeira palavra
+        for doc_id, posicoes_iniciais in docs_do_termo_inicial.items():
+            # Para cada ocorrência da primeira palavra...
+            for pos_inicio in posicoes_iniciais:
+                match_completo = True
+
+                # Verifica se as palavras seguintes estão nas posições seguintes (pos_inicio + i)
+                for i in range(1, len(frase_processada)):
+                    termo_seguinte = frase_processada[i]
+                    posicao_esperada = pos_inicio + i
+
+                    # Checa se o termo existe no índice, no doc, e na posição exata
+                    if (termo_seguinte not in self.indice or
+                        doc_id not in self.indice[termo_seguinte] or
+                        posicao_esperada not in self.indice[termo_seguinte][doc_id]):
+                        match_completo = False
+                        break
+
+                if match_completo:
+                    candidatos.add(doc_id)
+                    break # Se achou uma vez no doc, já serve
+
+        return candidatos
