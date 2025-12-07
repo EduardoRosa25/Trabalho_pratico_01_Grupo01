@@ -3,6 +3,7 @@ from typing import Dict, List, Any
 from MatrizIDF import MatrizTFIDF
 from Documento import Documento
 from ProcessadorTexto import ProcessadorTexto
+from IndiceInvertido import IndiceInvertido
 
 class Colecao:
     def __init__(self):
@@ -16,6 +17,8 @@ class Colecao:
         
         self.matriz_handler = MatrizTFIDF()
         self.processador = ProcessadorTexto()
+
+        self.indice_invertido_handler = IndiceInvertido()
 
     def carregar_dados_iniciais(self, caminho_arquivo: str):
         """
@@ -131,6 +134,16 @@ class Colecao:
         # 2. Chama o Integrante 2 (MatrizIDF)
         if self.documentos:
             self.matriz_handler.construir_matrizes(self.documentos)
+
+        # 3. Atualiza Índice Invertido (com posições)
+        if self.documentos:
+            self.indice_invertido_handler.construir_indice(self.documentos)
             
     def get_vocabulario(self):
         return self.vocabulario
+
+    def get_indice_invertido_handler(self):
+        return self.indice_invertido_handler
+
+    def get_matriz_handler(self):
+        return self.matriz_handler
